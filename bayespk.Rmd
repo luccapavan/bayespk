@@ -1,0 +1,146 @@
+---
+title: "Estimação do modelo BVAR usando R"
+author: "Lucca Simeoni Pavan"
+date: "13 de julho de 2016"
+output:
+  pdf_document:
+    keep_tex: yes
+    number_sections: yes
+    toc: yes
+  html_document:
+    toc: yes
+---
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = FALSE, cache = TRUE,
+                warning = FALSE, message = FALSE, error = FALSE, tidy = TRUE)
+```
+
+
+# R Markdown
+
+Este é um documento R Markdown. Markdown é uma linguagem de formatação simples para produzir documentos HTML, PDF e MS Word. Para mais detalhes sobre a utilização do R Markdown veja <http://rmarkdown.rstudio.com>.
+
+Quando clicar no botão **Knit** um documento será gerado que inclui o conteúdo e o resultado  de qualquer chunk de código R dentro do documento.
+
+
+
+# Dados
+
+Os dados foram coletados em <http://www.ipeadata.gov.br/>. A variável PIB é o Produto Interno Bruto, em milhões de reais cuja estimativa é realizada pelo Banco Central do Brasil. A série PIB foi deflacionada pelo IPCA cuja fonte é o Instituto Brasileiro de Geografia e estatística , Sistema Nacional de Índice de Preços ao consumidor (IBGE/SNIPC), medido em variação percentual.
+As variáveis exportações e importações (*free on board*-FOB) é medida em milhões de dólares com fonte no Ministério do Desenvolvimento, Indústria e Comércio exterior. O investimento estrangeiro direto representa o fluxo de capital estrangeiro para o Brasil e é o saldo em milhões de dólares de investimento estrangeiro direto da conta financeira com fonte no IPEATADA. 
+
+As exportações e investimento estrangeiro direto foram corrigidas pela taxa de câmbio efetiva real INPC das exportações elaborada pelo Instituto Nacional de Pesquisa Econômica Aplicada (IPEA). As importações foram corrigidas pela taxa de câmbio efetiva real INPC das importações cuja fonte também é o IPEA. A série histórica tem periodicidade mensal com início em janeiro de 1995 e término em fevereiro de 2015 totalizando 242 observações.
+
+A tabela abaixo mostra uma parte da série das variáveis PIB, exportações (FOB), importações (FOB) do Brasil e saldo de investimento estrangeiro direto no Brasil, agora tranformadas em bilhões de reais, para o período de setembro de 2014 a fevereiro de 2015. A série completa dos dados será usada para a estimação da distribuição posterior especificada na metodologia. Os dados usados para a geração dos resultados expostos pode ser baixado em <https://github.com/luccapavan/bayespk/blob/master/rdatapk2.Rda>.
+
+```{r kable}
+load(file = "rdatapk2.Rda")
+library(knitr)
+kable(tail(rdatapk2), caption = "Amostra das variáveis em nível (bilhões de reais)")
+```
+
+A figura a seguir mostra o gráfico da variável PIB, das exportações (FOB), das importações (FOB) do Brasil e da entrada líquida de investimento estrangeiro direto no Brasil no período de janeiro de 1995 a fevereiro de 2015. Podemos observar que o comportamento da variável "forin" que corresponde à entrada líquida de investimento estrangeiro direto apresenta uma variabilidade de menor tendência enquanto o comportamento da variável PIB apresenta forte comportamento tendencioso.  
+
+```{r gtsplot}
+library(BMR)
+gtsplot(rdatapk2[,2:5])
+```
+
+Em seguida é apresentado os histogramas das quatro variáveis utilizadas.
+
+```{r hist}
+par(mfrow = c(2, 2))
+hist(rdatapk2[,2:5]$pib)
+hist(rdatapk2[,2:5]$expfob)
+hist(rdatapk2[,2:5]$impfob)
+hist(rdatapk2[,2:5]$forin)
+```
+Agora é apresentado um resumo das variáveis, a matriz de covariância e a matriz de correlação das variáveis utilizadas para a construção da distribuição posterior. Todas as séries apresentam alto grau de correlação positiva entre si, sendo a variável "forin" que representa o saldo de investimento estrangeiro direto, a variável que apresenta menor correlação com as demais variáveis entre as quatro séries estudadas.
+
+```{r summary}
+sumpk <- summary(rdatapk2[,2:5])
+library(knitr)
+kable(sumpk, caption = "Média, mediana e alcance dos dados")
+```
+```{r Cov}
+varpk <- var(rdatapk2[,2:5])
+library(knitr)
+kable(varpk, caption = "Matriz de variância e covariância dos dados")
+```
+```{r Corr}
+corpk <- cor(rdatapk2[,2:5])
+library(knitr)
+kable(corpk, caption = "Matriz de correlação dos dados")
+```
+
+## Estacionariedade das séries
+
+Para verificar a estacionariedade das séries foram realziados os testes KPSS de Kwiatkowski e o teste Dickey-Fuller Aumentado (ADF). Para o teste KPSS o número de defasagens considerado foi 4. Este teste possui hipótese nula de estacionariedade e foi calculado de duas formas levando-se em consideração o teste com e sem tendência. Os valores calculados dos testes de todas as variaveis são maiores que os valores tabelados, o que nos leva a rejeitar a hipótese nula de estacionariedade tanto no modelo com tendência quanto no modelo sem tedência.
+
+O teste Dickey-Fuller Aumentado foi realizado estipulando-se um número máximo de defasagens da primeira diferença em oito períodos. O número ótimo de desafagens incluídas na estimação foi escolhido com base na minimização do Critério Bayesiano de Informação. Foram feitas três especificações diferentes ao se realizar o teste. A primeira com *drift* e tendência, a segunda apenas com *drift* e a última sem *drift* e sem tendência. O teste ADF possui hipótese nula de não autocorrelação e conforme os resultados da tabela não se rejeita a hipótese nula de não autocorrelação das séries nas três especificações tratadas,  exceto para a variável "forin" que representa o saldo de investimento estrangeiro direto que possui hipótese nula rejeitada apenas a um porcento de significância. Contudo, pelos testes apresentados podemos concluir que as séries são autocorrelacionadas e  não apresentam estacionariedade.
+
+
+```{r stat, results='hide'}
+library(BMR)
+library(knitr)
+stat <- stationarity(rdatapk2[,2:5], 4, 8)
+```
+```{r}
+kable(stat$KPSS, caption = "Teste KPSS", format = "latex", booktabs = TRUE, longtable = TRUE, digits = 2)
+kable(stat$ADF, caption = "Teste ADF", format = "latex", booktabs = TRUE, longtable = TRUE, digits = 2)
+kable(stat$ADFLags, caption = "Defagens do teste ADF", format = "latex", booktabs = TRUE, longtable = TRUE, digits = 2)
+```
+
+
+Além dos testes KPSS e ADF realizados anteriormente podemos analisar a Função de Autocorrelação (FAC) e a Função de Autocorrelação Parcial apresentadas (FACP) abaixo. A partir da análise gráfica, fica evidente que a FAC sugere elevado grau de autocorrelação positiva significativa nas quatro variáveis estudadas para vários períodos de  defasagem. A FACP indica autocorrelação parcial positiva significativa apenas para a primeira defasagem das variáveis PIB, exportações e importações, enquanto para a variável saldo de investimento estrangeiro direto, a FACP apresenta autocorrelação parcial positiva significativa até a terceira defasagem.
+
+```{r afc}
+gacf(rdatapk2[,2:5],lags=12,ci=0.95,plot=T,barcolor="purple",
+     names=T,save=F,height=6,width=12)
+gpacf(rdatapk2[,2:5],lags=12,ci=0.95,plot=T,barcolor="darkred",
+        names=F,save=F,height=6,width=12)
+```
+
+# Resultados da estimação BVAR
+
+Como as variáveis tratadas não são estacionárias, o método clássico de vetores autorregressivos (VAR) não pode ser utilizado. Tal fato justifica a utilização de um método alternativo que neste caso é o método Bayesiano de estimação de vetores autorregressivos (BVAR). Por ser um método de inferência sobre os parâmetros e utilizar as variáveis como suporte para a estimação da distribuição posterior dos parâmetros de interesse, as propriedades (estacionariedade das variáveis) do modelo VAR clássico não são mais necessárias. Conforme explicado na metodologia, as variáveis no modelo BVAR são 'constantes' que definem a proporcionalidade entre a distribuição anterior e a distribuição posterior.
+
+A tabela 8 apresenta a matriz de média dos coeficientes que estão separados conforme o modelo e o número de defasagens. Na primeira linha, por exemplo, estão as médias dos coeficientes da primeira equação que possui o PIB como variável explicada e as defasagens do PIB e demais variáveis como variáveis explicativas.  A equação que decreve o comportamento do PIB, conforme as estimativas seria:
+
+$$PIB_t =1.17 + 0.58PIB_{t-1}-0.08PIB_{t-2}-0.06PIB_{t-3}+0.57PIB_{t-4}$$
+$$-0.06expfob_{t-1}-0.05expfob_{t-2}-0.06expfob_{t-3}+0.07expfob_{t-4}$$
+$$-0.05impfob_{t-1}-0.02impfob_{t-2}+0.001expfob_{t-3}+0.04expfob_{t-4}$$
+$$0.01forin_{t-1}+0.004forin_{t-2}-0.034forin_{t-3}+0.02forin_{t-4}$$.
+
+E de forma semelhante para as demais variáveis. Avaliando a equação do PIB, a primeira e quarta defasagens são em média as de maior influência sobre o nível do PIB corrente. A matriz de covariância média dos resíduos mostra uma elevada variânci dos resíduos da equação do PIB e uma covariância quase nula entre as equações de importações e saldo de investimento estrangeiro direto. O PIB também apresenta as maiores covariâncias com as demais equações. O pequeno efeito identificado pelas estimativas pode ser justificado pela diferença de nível entre as variáveis, como pode ser visto na tabela do resumo das variáveis. Outro fato que explicaria a dimensão dos efeitos seria o de que o Brasil é um páis relativamente fechado em relação a outros países em desenvolvimento - a representatividade do comércio exterior na economia brasileira foi de 27,6\% do PIB em 2013\footnote{Fonte:MDIC-PNE}. Os outros países do BRICs, por exemplo, são mais abertos que o Brasil: África do Sul (62,4\%), Rússia (50,9\%), Índia (53,3\%) e China (50,2\%). Além disso, a periodicidade mensal pode caracterizar um curto espaço de tempo para que as variáveis gerem um efeito relevante entre si.
+
+```{r bvarw, cache = TRUE}
+library(BMR)
+bvarw <- BVARW(rdatapk2[,2:5],cores=5,c(0.9,0.95,0.95, 0.95), p=4,constant=T,irf.periods=20, keep=10000,burnin=5000, XiBeta=4,XiSigma=1,gamma=NULL)
+library(knitr)
+kable(bvarw$Beta, caption = "Matriz de média dos coeficientes", digits = 2)
+kable(bvarw$Sigma, caption = "Estimativa posterior da matriz de covariância média dos resíduos", col.names = c("pib", "expfob", "impfob", "forin"))
+```
+
+As funções de impulso-resposta são úteis ao analisarmos as implicações teóricas do modelo de Moreno-Brid sugeridas pelas estimações realizadas. Conforme a função impulso resposta, um choque das exportações implica em aumento do nível de Produto Interno Bruto durante os próximos 4 períodos de forma crescente, sendo que o efeito deste choque se dissipa ao longo do tempo e permace além do vígésimo período. Este efeito está de acordo com o efeito denomicado Lei de Thirlwall que estabelece uma relacão entre taxa de crescimento das exportações e taxa de crescimento do produto. Um choque nas importações causa um efeito negativo no PIB durnate apenas um período e depois disso gera um aumento do nível de atividade econômica, o que sugere que as importações têm importância para o aumento do nível do PIB. Este fato nos fornece indícios que as importações são, em boa parte, de fatores e insumos de produção comumente mais eficientes quando obtidos no comércio internacional.
+
+Um choque no saldo de investimento estrangeiro direto, conforme descrito pela função impulso-resposta, causa redução do nível de Produto Interno Bruto, e este efeito se mantém ao longo do tempo. Este fato sugere que a entrada de recursos externos não apenas são um impedimento ao aumento do nível do PIB, como causam sua redução. Portanto, o argumento de Moreno-Brid de que a entrada de capital estrangeiro possa contribuir para o crescimento econômico não ocorre para o Brasil, segundo as estimativas. Moreno-Brid argumenta que a entrada de capital estrangeiro não se torna uma armadilha explosiva, e que o aumento da dívida de um país, se constante, não causa uma crise de confiança dos investidores estrangeiros. Entretanto, a função impulso-resposta nos mostra que um choque de investimento estrangeiro direto causa uma redução no investimento estrangeiro direto futuro nos primeiros períodos, mostrando uma pequena recuperação antes do efeito se dissipar ao longo do tempo.
+
+```{r}
+library(BMR)
+IRF(bvarw,percentiles=c(0.05,0.5,0.95),save=F)
+```
+
+
+```{r}
+plot(bvarw, type = 1, save=F, height=13, width=13, plotSigma = TRUE)
+```
+
+```{r}
+forecast(bvarw,periods=10,shocks=T,plot=T,percentiles=c(.05,.50,.95),backdata=10,save=F)
+```
+
+
+
+
